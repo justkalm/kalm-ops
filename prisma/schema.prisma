@@ -1,0 +1,119 @@
+// prisma/schema.prisma
+//
+// Real, persisted backing for the (kalm) internal ops dashboard —
+// budget, CRM pipeline, cap table/equity, compliance calendar, KPIs, and
+// flagged-contractor reports. This replaces the original prototype's
+// window.storage calls (which only work inside a Claude.ai artifact) with
+// an actual database, so the app works as a real, standalone, deployed
+// site with real persistence.
+//
+// Kept deliberately separate from the buildbridge-app project and its
+// database — this holds sensitive founder-only data (budget, equity
+// split, legal filings) that has no reason to share infrastructure or
+// risk exposure with the public-facing product.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// A single row holding dashboard-wide settings that aren't tied to any
+// one module — the budget ceiling and the equity vesting start date.
+// Enforced as exactly one row via a fixed id, rather than a bare
+// key-value table, since there are only ever these two settings.
+model Settings {
+  id             String   @id @default("singleton")
+  budgetCeiling  Int      @default(600000)
+  vestingStart   DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model BudgetItem {
+  id        String   @id @default(cuid())
+  category  String
+  item      String
+  planned   Int      @default(0)
+  spent     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// "Stage" as a free string (not an enum) deliberately — the original
+// component's CRM_STAGES list is the source of truth for valid values on
+// the frontend; keeping this a string avoids a schema migration every
+// time a stage label needs to change.
+model CRMContact {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // "Developer" | "Contractor"
+  zone        String?
+  source      String
+  owner       String   // "moiz" | "hassan" | "anas"
+  stage       String
+  notes       String?
+  lastContact DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// One row per founder. Equity percentages and vesting math are computed
+// from vestingStart (in Settings) at read time, not stored — so the
+// vested percentage is always accurate as of "now" rather than a stale
+// snapshot from whenever it was last saved.
+model FounderEquity {
+  id      String @id @default(cuid())
+  person  String @unique // "moiz" | "hassan" | "anas"
+  equity  Float
+  capital Int
+}
+
+model ComplianceItem {
+  id        String   @id @default(cuid())
+  title     String
+  due       DateTime
+  status    String   @default("pending") // "pending" | "done"
+  owner     String   // "moiz" | "hassan" | "anas"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A running snapshot of the current KPI values — one row, updated in
+// place (not one row per metric) since these are read/written together
+// as a single dashboard view.
+model KPISnapshot {
+  id                      String   @id @default("singleton")
+  contractorProfiles      Int      @default(0)
+  developerAccounts       Int      @default(0)
+  verifiedProfiles        Int      @default(0)
+  platformIntroductions   Int      @default(0)
+  trialCohortActive       Int      @default(0)
+  updatedAt               DateTime @updatedAt
+}
+
+// A dated historical record, separate from KPISnapshot above — created
+// each time "Log today's snapshot to history" is used, so trends over
+// time are preserved even as the live snapshot keeps changing.
+model KPIHistoryEntry {
+  id                    String   @id @default(cuid())
+  date                  DateTime
+  contractorProfiles    Int
+  developerAccounts     Int
+  verifiedProfiles      Int
+  platformIntroductions Int
+  trialCohortActive     Int
+  createdAt             DateTime @default(now())
+}
+
+model Flag {
+  id             String   @id @default(cuid())
+  contractorName String
+  reportedBy     String?
+  stage          String   @default("Reported")
+  dateReported   DateTime
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
