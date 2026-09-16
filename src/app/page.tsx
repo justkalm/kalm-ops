@@ -55,8 +55,8 @@ const COLORS = {
 
 const PEOPLE = {
   moiz: { name: "Moiz", role: "Finance & Tech", title: "CTO / CFO", initial: "M" },
-  hassan: { name: "Hassan", role: "Legal & Ops", title: "COO", initial: "H" },
-  anas: { name: "Anas", role: "Growth & Ops", title: "CMO", initial: "A" },
+  hassan: { name: "Hassan", role: "Legal & Ops", title: "CEO", initial: "H" },
+  anas: { name: "Anas", role: "Growth & Ops", title: "CMO / COO", initial: "A" },
 };
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -1214,6 +1214,17 @@ const MODULE_TITLES = {
   flags: "Reports & Flags",
 };
 
+function useIsDesktop(breakpoint = 900) {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= breakpoint);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+  return isDesktop;
+}
+
 export default function KalmDashboard() {
   const {
     data, loading, saving,
@@ -1227,6 +1238,7 @@ export default function KalmDashboard() {
   const [person, setPerson] = useState("moiz");
   const [tab, setTab] = useState("home");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   if (loading) {
     return (
@@ -1241,6 +1253,127 @@ export default function KalmDashboard() {
   }
 
   const bottomTabs = TABS;
+
+  const moduleContent = (
+    <>
+      {tab !== "home" && (
+        <div style={{ fontSize: isDesktop ? 24 : 19, fontWeight: 700, color: COLORS.navy, margin: isDesktop ? "0 0 20px" : "8px 0 14px" }}>
+          {MODULE_TITLES[tab]}
+        </div>
+      )}
+      {tab === "home" && person === "moiz" && <MoizHome data={data} setTab={setTab} />}
+      {tab === "home" && person === "hassan" && <HassanHome data={data} setTab={setTab} />}
+      {tab === "home" && person === "anas" && <AnasHome data={data} setTab={setTab} />}
+      {tab === "budget" && <BudgetModule data={data} addBudgetItem={addBudgetItem} updateBudgetItem={updateBudgetItem} deleteBudgetItem={deleteBudgetItem} />}
+      {tab === "crm" && <CRMModule data={data} addCRMContact={addCRMContact} updateCRMContact={updateCRMContact} deleteCRMContact={deleteCRMContact} />}
+      {tab === "captable" && <CapTableModule data={data} updateVestingStart={updateVestingStart} />}
+      {tab === "compliance" && <ComplianceModule data={data} addComplianceItem={addComplianceItem} updateComplianceItem={updateComplianceItem} deleteComplianceItem={deleteComplianceItem} />}
+      {tab === "kpi" && <KPIModule data={data} updateKpi={updateKpi} logKpiSnapshot={logKpiSnapshot} />}
+      {tab === "flags" && <FlagsModule data={data} addFlag={addFlag} updateFlag={updateFlag} deleteFlag={deleteFlag} />}
+    </>
+  );
+
+  const switcher = (
+    <Sheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} title="Switch view">
+      {Object.entries(PEOPLE).map(([key, p]) => (
+        <Card
+          key={key}
+          onClick={() => { setPerson(key); setSwitcherOpen(false); setTab("home"); }}
+          style={{
+            padding: 14, marginBottom: 8, cursor: "pointer",
+            border: person === key ? `2px solid ${COLORS.navy}` : "2px solid transparent",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%", background: COLORS.navy, color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700,
+            }}>{p.initial}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.navy }}>{p.name}</div>
+              <div style={{ fontSize: 12, color: COLORS.gold, fontWeight: 600 }}>{p.title} · {p.role}</div>
+            </div>
+            {person === key && <CheckCircle2 size={18} color={COLORS.navy} />}
+          </div>
+        </Card>
+      ))}
+      <div style={{ fontSize: 11, color: COLORS.grey, textAlign: "center", marginTop: 10, lineHeight: 1.4 }}>
+        All data is shared across everyone — switching only changes your home screen.
+      </div>
+    </Sheet>
+  );
+
+  const savingIndicator = saving && (
+    <div style={{
+      position: "absolute", top: 10, right: 14, fontSize: 10, color: COLORS.greyLight,
+      display: "flex", alignItems: "center", gap: 4,
+    }}>
+      <Loader2 size={10} style={{ animation: "spin 1s linear infinite" }} />
+    </div>
+  );
+
+  if (isDesktop) {
+    return (
+      <div style={{
+        display: "flex", height: "100vh", background: COLORS.bg,
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        position: "relative",
+      }}>
+        <div style={{
+          width: 240, flexShrink: 0, display: "flex", flexDirection: "column",
+          background: COLORS.card, borderRight: "1px solid #EBEEF2", padding: "20px 14px",
+        }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.navy, letterSpacing: -0.5, padding: "0 8px", marginBottom: 24 }}>
+            (kalm)
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+            {bottomTabs.map(({ key, label, Icon }) => (
+              <div
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+                  borderRadius: 10, cursor: "pointer",
+                  background: tab === key ? COLORS.steelLight : "transparent",
+                }}
+              >
+                <Icon size={18} color={tab === key ? COLORS.navy : COLORS.grey} strokeWidth={tab === key ? 2.4 : 2} />
+                <span style={{ fontSize: 13.5, fontWeight: tab === key ? 700 : 500, color: tab === key ? COLORS.navy : COLORS.grey }}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div
+            onClick={() => setSwitcherOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, background: COLORS.bg, padding: "8px 10px",
+              borderRadius: 10, cursor: "pointer", marginTop: 12,
+            }}
+          >
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%", background: COLORS.navy, color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0,
+            }}>{PEOPLE[person].initial}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.navy }}>{PEOPLE[person].name}</div>
+              <div style={{ fontSize: 10.5, color: COLORS.grey }}>{PEOPLE[person].title}</div>
+            </div>
+            <ChevronDown size={13} color={COLORS.grey} />
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: "auto", padding: "32px 40px" }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            {moduleContent}
+          </div>
+        </div>
+
+        {switcher}
+        {savingIndicator}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -1267,20 +1400,7 @@ export default function KalmDashboard() {
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "6px 16px 16px" }}>
-        {tab !== "home" && (
-          <div style={{ fontSize: 19, fontWeight: 700, color: COLORS.navy, margin: "8px 0 14px" }}>
-            {MODULE_TITLES[tab]}
-          </div>
-        )}
-        {tab === "home" && person === "moiz" && <MoizHome data={data} setTab={setTab} />}
-        {tab === "home" && person === "hassan" && <HassanHome data={data} setTab={setTab} />}
-        {tab === "home" && person === "anas" && <AnasHome data={data} setTab={setTab} />}
-        {tab === "budget" && <BudgetModule data={data} addBudgetItem={addBudgetItem} updateBudgetItem={updateBudgetItem} deleteBudgetItem={deleteBudgetItem} />}
-        {tab === "crm" && <CRMModule data={data} addCRMContact={addCRMContact} updateCRMContact={updateCRMContact} deleteCRMContact={deleteCRMContact} />}
-        {tab === "captable" && <CapTableModule data={data} updateVestingStart={updateVestingStart} />}
-        {tab === "compliance" && <ComplianceModule data={data} addComplianceItem={addComplianceItem} updateComplianceItem={updateComplianceItem} deleteComplianceItem={deleteComplianceItem} />}
-        {tab === "kpi" && <KPIModule data={data} updateKpi={updateKpi} logKpiSnapshot={logKpiSnapshot} />}
-        {tab === "flags" && <FlagsModule data={data} addFlag={addFlag} updateFlag={updateFlag} deleteFlag={deleteFlag} />}
+        {moduleContent}
       </div>
 
       <div style={{
@@ -1304,42 +1424,8 @@ export default function KalmDashboard() {
         ))}
       </div>
 
-      <Sheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} title="Switch view">
-        {Object.entries(PEOPLE).map(([key, p]) => (
-          <Card
-            key={key}
-            onClick={() => { setPerson(key); setSwitcherOpen(false); setTab("home"); }}
-            style={{
-              padding: 14, marginBottom: 8, cursor: "pointer",
-              border: person === key ? `2px solid ${COLORS.navy}` : "2px solid transparent",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: "50%", background: COLORS.navy, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700,
-              }}>{p.initial}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.navy }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: COLORS.gold, fontWeight: 600 }}>{p.title} · {p.role}</div>
-              </div>
-              {person === key && <CheckCircle2 size={18} color={COLORS.navy} />}
-            </div>
-          </Card>
-        ))}
-        <div style={{ fontSize: 11, color: COLORS.grey, textAlign: "center", marginTop: 10, lineHeight: 1.4 }}>
-          All data is shared across everyone — switching only changes your home screen.
-        </div>
-      </Sheet>
-
-      {saving && (
-        <div style={{
-          position: "absolute", top: 10, right: 14, fontSize: 10, color: COLORS.greyLight,
-          display: "flex", alignItems: "center", gap: 4,
-        }}>
-          <Loader2 size={10} style={{ animation: "spin 1s linear infinite" }} />
-        </div>
-      )}
+      {switcher}
+      {savingIndicator}
     </div>
   );
 }
