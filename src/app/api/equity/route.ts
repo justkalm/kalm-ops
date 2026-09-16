@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest) {
       prisma.founderEquity.upsert({
         where: { person: e.person },
         update: { equity: e.equity, capital: e.capital },
-        create: e,
+        create: { person: e.person, equity: e.equity, capital: e.capital },
       })
     )
   );

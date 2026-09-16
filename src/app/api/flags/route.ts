@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
   }
+  const { contractorName, reportedBy, stage, dateReported, notes } = parsed.data;
   const flag = await prisma.flag.create({
-    data: { ...parsed.data, dateReported: new Date(parsed.data.dateReported) },
+    data: { contractorName, reportedBy, stage, dateReported: new Date(dateReported), notes },
   });
   return NextResponse.json(flag);
 }

@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
   }
+  const { name, type, zone, source, owner, stage, notes, lastContact } = parsed.data;
   const contact = await prisma.cRMContact.create({
-    data: { ...parsed.data, lastContact: new Date(parsed.data.lastContact) },
+    data: { name, type, zone, source, owner, stage, notes, lastContact: new Date(lastContact) },
   });
   return NextResponse.json(contact);
 }
