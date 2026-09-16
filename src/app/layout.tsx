@@ -2,6 +2,8 @@
 
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: '(kalm) ops',
   description: 'Internal founder dashboard — budget, pipeline, equity, compliance, KPIs.',
