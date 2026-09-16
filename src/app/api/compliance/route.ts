@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
   }
+  const { title, due, status, owner } = parsed.data;
   const item = await prisma.complianceItem.create({
-    data: { ...parsed.data, due: new Date(parsed.data.due) },
+    data: { title, due: new Date(due), status, owner },
   });
   return NextResponse.json(item);
 }

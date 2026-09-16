@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
   }
-  const item = await prisma.budgetItem.create({ data: parsed.data });
+  const { category, item: itemName, planned, spent } = parsed.data;
+  const item = await prisma.budgetItem.create({ data: { category, item: itemName, planned, spent } });
   return NextResponse.json(item);
 }
