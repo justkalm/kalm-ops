@@ -26,9 +26,23 @@ datasource db {
 // key-value table, since there are only ever these two settings.
 model Settings {
   id             String   @id @default("singleton")
-  budgetCeiling  Int      @default(600000)
+  budgetCeiling  Int      @default(450000)
   vestingStart   DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model FundingContribution {
+  id         String    @id @default(cuid())
+  partner    String    // "moiz" | "hassan" | "anas"
+  round      Int       // 1, 2, or 3
+  amount     Int       @default(50000)
+  targetDate DateTime
+  paid       Boolean   @default(false)
+  paidDate   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([partner, round])
 }
 
 model BudgetItem {

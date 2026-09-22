@@ -25,7 +25,7 @@ import {
   Home, Wallet, Contact, PieChart, ListChecks, Flag, Plus, X,
   ChevronRight, ChevronDown, AlertTriangle, Calendar, Trash2, Edit3,
   User, Building2, Percent, FileWarning,
-  Loader2
+  Loader2, Landmark
 } from "lucide-react";
 
 /* ============================================================
@@ -56,7 +56,8 @@ const COLORS = {
 const PEOPLE = {
   moiz: { name: "Moiz", role: "Finance & Tech", title: "CTO / CFO", initial: "M" },
   hassan: { name: "Hassan", role: "Legal & Ops", title: "CEO", initial: "H" },
-  anas: { name: "Anas", role: "Growth & Ops", title: "CMO / COO", initial: "A" },
+  shaheer: { name: "Shaheer", role: "Growth & Tech", title: "CGO / CMO", initial: "S" },
+  anas: { name: "Anas", role: "Ops", title: "COO", initial: "A" },
 };
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -98,6 +99,11 @@ async function apiPut(path, body) {
   if (!res.ok) throw new Error(`PUT ${path} failed`);
   return res.json();
 }
+async function apiPatch(path, body) {
+  const res = await fetch(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`PATCH ${path} failed`);
+  return res.json();
+}
 async function apiDelete(path) {
   const res = await fetch(path, { method: 'DELETE' });
   if (!res.ok) throw new Error(`DELETE ${path} failed`);
@@ -114,13 +120,14 @@ function useKalmData() {
   const [kpi, setKpi] = useState({ contractorProfiles: 0, developerAccounts: 0, verifiedProfiles: 0, platformIntroductions: 0, trialCohortActive: 0 });
   const [kpiHistory, setKpiHistory] = useState([]);
   const [flags, setFlags] = useState([]);
+  const [funding, setFunding] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [budgetRes, settingsRes, crmRes, equityRes, complianceRes, kpiRes, historyRes, flagsRes] = await Promise.all([
+        const [budgetRes, settingsRes, crmRes, equityRes, complianceRes, kpiRes, historyRes, flagsRes, fundingRes] = await Promise.all([
           apiGet('/api/budget'),
           apiGet('/api/settings'),
           apiGet('/api/crm'),
@@ -129,6 +136,7 @@ function useKalmData() {
           apiGet('/api/kpi'),
           apiGet('/api/kpi/history'),
           apiGet('/api/flags'),
+          apiGet('/api/funding'),
         ]);
         setBudgetItems(budgetRes);
         setBudgetCeiling(settingsRes.budgetCeiling);
@@ -139,6 +147,7 @@ function useKalmData() {
         setKpi(kpiRes);
         setKpiHistory(historyRes.map(h => ({ ...h, date: toDateInputValue(h.date) })));
         setFlags(flagsRes.map(f => ({ ...f, dateReported: toDateInputValue(f.dateReported) })));
+        setFunding(fundingRes.map(f => ({ ...f, targetDate: toDateInputValue(f.targetDate), paidDate: f.paidDate ? toDateInputValue(f.paidDate) : null })));
       } catch (e) {
         console.error('Failed to load dashboard data', e);
       }
@@ -227,8 +236,16 @@ function useKalmData() {
     setFlags(prev => prev.filter(x => x.id !== id));
   }), [withSaving]);
 
+  // Funding contributions
+  const setFundingPaid = useCallback((id, paid) => withSaving(async () => {
+    const updated = await apiPatch('/api/funding', { id, paid });
+    setFunding(prev => prev.map(f => f.id === id
+      ? { ...updated, targetDate: toDateInputValue(updated.targetDate), paidDate: updated.paidDate ? toDateInputValue(updated.paidDate) : null }
+      : f));
+  }), [withSaving]);
+
   return {
-    data: { budgetItems, budgetCeiling, crm, equity, vestingStart, compliance, kpi, kpiHistory, flags },
+    data: { budgetItems, budgetCeiling, crm, equity, vestingStart, compliance, kpi, kpiHistory, flags, funding },
     loading, saving,
     addBudgetItem, updateBudgetItem, deleteBudgetItem,
     addCRMContact, updateCRMContact, deleteCRMContact,
@@ -236,6 +253,7 @@ function useKalmData() {
     addComplianceItem, updateComplianceItem, deleteComplianceItem,
     updateKpi, logKpiSnapshot,
     addFlag, updateFlag, deleteFlag,
+    setFundingPaid,
   };
 }
 
@@ -542,6 +560,133 @@ function BudgetModule({ data, addBudgetItem, updateBudgetItem, deleteBudgetItem 
           </>
         )}
       </Sheet>
+    </div>
+  );
+}
+
+/* ============================================================
+   FUNDING MODULE
+   3 founders × 3 rounds × ₹50k, staggered every alternate month.
+   ============================================================ */
+
+function FundingModule({ data, setFundingPaid }) {
+  const rounds = useMemo(() => {
+    const byRound: Record<number, any[]> = {};
+    data.funding.forEach((f) => {
+      if (!byRound[f.round]) byRound[f.round] = [];
+      byRound[f.round].push(f);
+    });
+    return Object.keys(byRound).sort((a, b) => Number(a) - Number(b)).map((r) => ({
+      round: Number(r),
+      rows: byRound[Number(r)].sort((a, b) => a.partner.localeCompare(b.partner)),
+    }));
+  }, [data.funding]);
+
+  const totalPledged = data.funding.reduce((s, f) => s + Number(f.amount || 0), 0);
+  const totalReceived = data.funding.filter((f) => f.paid).reduce((s, f) => s + Number(f.amount || 0), 0);
+  const { spent } = budgetTotals(data);
+  const cashOnHand = totalReceived - spent;
+
+  const perPartner = useMemo(() => {
+    const map: Record<string, { paid: number; total: number }> = {};
+    data.funding.forEach((f) => {
+      if (!map[f.partner]) map[f.partner] = { paid: 0, total: 0 };
+      map[f.partner].total += Number(f.amount || 0);
+      if (f.paid) map[f.partner].paid += Number(f.amount || 0);
+    });
+    return map;
+  }, [data.funding]);
+
+  if (data.funding.length === 0) {
+    return <EmptyState Icon={Landmark} title="No funding schedule yet" body="This should seed automatically — try refreshing." />;
+  }
+
+  return (
+    <div>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: COLORS.grey }}>Received vs pledged</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.navy }}>
+            {fmtINR(totalReceived)} / {fmtINR(totalPledged)}
+          </div>
+        </div>
+        <ProgressBar pct={(totalReceived / totalPledged) * 100} color={COLORS.green} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, paddingTop: 14, borderTop: "1px solid #EEF1F5" }}>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.grey }}>Spent so far</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.navy }}>{fmtINR(spent)}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: COLORS.grey }}>Cash on hand</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: cashOnHand >= 0 ? COLORS.green : COLORS.red }}>
+              {fmtINR(cashOnHand)}
+            </div>
+          </div>
+        </div>
+        {cashOnHand < 0 && (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: COLORS.red, display: "flex", gap: 5, alignItems: "flex-start" }}>
+            <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+            Spend is ahead of what's actually been contributed so far.
+          </div>
+        )}
+      </Card>
+
+      <SectionLabel>By partner</SectionLabel>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        {Object.entries(perPartner).map(([key, v]) => (
+          <Card key={key} style={{ flex: 1, padding: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, marginBottom: 6 }}>
+              {PEOPLE[key]?.name ?? key}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.steel }}>{fmtINR(v.paid)}</div>
+            <div style={{ fontSize: 10.5, color: COLORS.grey }}>of {fmtINR(v.total)}</div>
+          </Card>
+        ))}
+      </div>
+
+      <SectionLabel>Rounds</SectionLabel>
+      {rounds.map(({ round, rows }) => {
+        const roundPaid = rows.every((r) => r.paid);
+        return (
+          <Card key={round} style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: COLORS.navy }}>Round {round}</div>
+              <Pill bg={roundPaid ? COLORS.greenLight : COLORS.amberLight} color={roundPaid ? COLORS.green : COLORS.amber}>
+                {roundPaid ? "Complete" : "In progress"}
+              </Pill>
+            </div>
+            {rows.map((r) => (
+              <div key={r.id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 0", borderTop: "1px solid #F1F3F6",
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.navy }}>
+                    {PEOPLE[r.partner]?.name ?? r.partner}
+                  </div>
+                  <div style={{ fontSize: 11, color: COLORS.grey }}>
+                    {fmtINR(r.amount)} · due {fmtDate(r.targetDate)}
+                    {r.paid && r.paidDate ? ` · paid ${fmtDate(r.paidDate)}` : ""}
+                  </div>
+                </div>
+                <div
+                  onClick={() => setFundingPaid(r.id, !r.paid)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+                    padding: "5px 10px", borderRadius: 20,
+                    background: r.paid ? COLORS.greenLight : COLORS.steelLight,
+                  }}
+                >
+                  <CheckCircle2 size={14} color={r.paid ? COLORS.green : COLORS.greyLight} />
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: r.paid ? COLORS.green : COLORS.grey }}>
+                    {r.paid ? "Paid" : "Mark paid"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -1198,6 +1343,7 @@ function AnasHome({ data, setTab }) {
 const TABS = [
   { key: "home", label: "Home", Icon: Home },
   { key: "budget", label: "Budget", Icon: Wallet },
+  { key: "funding", label: "Funding", Icon: Landmark },
   { key: "crm", label: "Pipeline", Icon: Contact },
   { key: "captable", label: "Equity", Icon: PieChart },
   { key: "compliance", label: "Filings", Icon: ListChecks },
@@ -1207,6 +1353,7 @@ const TABS = [
 
 const MODULE_TITLES = {
   budget: "Budget & Expenses",
+  funding: "Founder Funding",
   crm: "Contractor & Developer Pipeline",
   captable: "Equity & Vesting",
   compliance: "Compliance Calendar",
@@ -1234,6 +1381,7 @@ export default function KalmDashboard() {
     addComplianceItem, updateComplianceItem, deleteComplianceItem,
     updateKpi, logKpiSnapshot,
     addFlag, updateFlag, deleteFlag,
+    setFundingPaid,
   } = useKalmData();
   const [person, setPerson] = useState("moiz");
   const [tab, setTab] = useState("home");
@@ -1265,6 +1413,7 @@ export default function KalmDashboard() {
       {tab === "home" && person === "hassan" && <HassanHome data={data} setTab={setTab} />}
       {tab === "home" && person === "anas" && <AnasHome data={data} setTab={setTab} />}
       {tab === "budget" && <BudgetModule data={data} addBudgetItem={addBudgetItem} updateBudgetItem={updateBudgetItem} deleteBudgetItem={deleteBudgetItem} />}
+      {tab === "funding" && <FundingModule data={data} setFundingPaid={setFundingPaid} />}
       {tab === "crm" && <CRMModule data={data} addCRMContact={addCRMContact} updateCRMContact={updateCRMContact} deleteCRMContact={deleteCRMContact} />}
       {tab === "captable" && <CapTableModule data={data} updateVestingStart={updateVestingStart} />}
       {tab === "compliance" && <ComplianceModule data={data} addComplianceItem={addComplianceItem} updateComplianceItem={updateComplianceItem} deleteComplianceItem={deleteComplianceItem} />}

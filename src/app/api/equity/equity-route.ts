@@ -11,14 +11,15 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 
 const DEFAULT_EQUITY = [
-  { person: 'moiz', equity: 33.33, capital: 170000 },
-  { person: 'hassan', equity: 33.33, capital: 170000 },
-  { person: 'anas', equity: 33.34, capital: 170000 },
+  { person: 'moiz', equity: 33.5, capital: 150750 },
+  { person: 'hassan', equity: 33.5, capital: 150750 },
+  { person: 'shaheer', equity: 24, capital: 108000 },
+  { person: 'anas', equity: 9, capital: 40500 },
 ];
 
 const equitySchema = z.array(
   z.object({
-    person: z.enum(['moiz', 'hassan', 'anas']),
+    person: z.enum(['moiz', 'hassan', 'shaheer', 'anas']),
     equity: z.number().min(0).max(100),
     capital: z.number().int().min(0),
   })
